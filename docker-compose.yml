@@ -1,0 +1,47 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    restart: unless-stopped
+    ports:
+      - ${PORT}:${PORT}
+    environment:
+      APP_ENV: ${APP_ENV}
+      PORT: ${PORT}
+      CHALLENGE_DB_HOST: ${CHALLENGE_DB_HOST}
+      CHALLENGE_DB_PORT: ${CHALLENGE_DB_PORT}
+      CHALLENGE_DB_DATABASE: ${CHALLENGE_DB_DATABASE}
+      CHALLENGE_DB_USERNAME: ${CHALLENGE_DB_USERNAME}
+      CHALLENGE_DB_PASSWORD: ${CHALLENGE_DB_PASSWORD}
+      CHALLENGE_DB_SCHEMA: ${CHALLENGE_DB_SCHEMA}
+    depends_on:
+      psql_challenge:
+        condition: service_healthy
+    networks:
+      - challenge
+  psql:
+    image: postgres:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${BLUEPRINT_DB_DATABASE}
+      POSTGRES_USER: ${BLUEPRINT_DB_USERNAME}
+      POSTGRES_PASSWORD: ${BLUEPRINT_DB_PASSWORD}
+    ports:
+      - "${BLUEPRINT_DB_PORT}:5432"
+    volumes:
+      - psql_volume_challenge:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${CHALLENGE_DB_USERNAME} -d ${CHALLENGE_DB_DATABASE}'"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - challenge
+
+volumes:
+  psql_volume_challenge:
+networks:
+  blueprint:
