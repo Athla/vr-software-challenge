@@ -95,7 +95,6 @@ func Load() (*Config, error) {
 	return &config, nil
 }
 
-// ValidateConfig performs validation of the loaded configuration
 func (c *Config) Validate() error {
 	if c.App.Port <= 0 {
 		return fmt.Errorf("invalid port number: %d", c.App.Port)
