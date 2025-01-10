@@ -2,7 +2,9 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Create transactions table
+CREATE TYPE transaction_status AS ENUM ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED');
+
+-- Table creation + constrainst
 CREATE TABLE transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     description VARCHAR(50) NOT NULL,
@@ -10,11 +12,10 @@ CREATE TABLE transactions (
     amount_usd DECIMAL(10,2) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     processed_at TIMESTAMP WITH TIME ZONE,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    status transaction_status NOT NULL DEFAULT 'PENDING',
     CONSTRAINT transaction_description_length CHECK (LENGTH(description) <= 50),
     CONSTRAINT transaction_amount_positive CHECK (amount_usd > 0),
-    CONSTRAINT transaction_date_not_future CHECK (transaction_date <= CURRENT_DATE),
-    CONSTRAINT transaction_status_valid CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'))
+    CONSTRAINT transaction_date_not_future CHECK (transaction_date <= CURRENT_DATE)
 );
 
 -- Create indexes for common queries

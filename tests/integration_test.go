@@ -30,6 +30,11 @@ var (
 	cfg       *config.Config
 )
 
+func cleanup(t *testing.T) {
+	_, err := dbHandler.Exec("TRUNCATE TABLE transactions, transaction_audit_logs CASCADE")
+	assert.NoError(t, err, "Failed to cleanup test data")
+}
+
 func TestMain(m *testing.M) {
 	var err error
 	cfg, err = config.Load()
@@ -76,12 +81,18 @@ func setupRouter() *gin.Engine {
 }
 
 func TestCreateTransactionIntegration(t *testing.T) {
+	cleanup(t)
 	router := setupRouter()
+	repo := repository.NewTransactionRepository(dbHandler)
+
+	description := "Test Transaction"
+	amount := decimal.NewFromFloat(100.0)
+	dateStr := time.Now().Format("2006-01-02")
 
 	reqBody := handlers.CreateTransactionRequest{
-		Description:     "Test Transaction",
-		TransactionDate: "2023-10-10",
-		AmountUSD:       decimal.NewFromFloat(100.0),
+		Description:     description,
+		TransactionDate: dateStr,
+		AmountUSD:       amount,
 	}
 	body, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("POST", "/api/v1/transactions", bytes.NewBuffer(body))
@@ -96,19 +107,31 @@ func TestCreateTransactionIntegration(t *testing.T) {
 	err := json.Unmarshal(rr.Body.Bytes(), &resp)
 	assert.NoError(t, err)
 	assert.NotEqual(t, uuid.Nil, resp.ID)
-	assert.Equal(t, "PENDING", resp.Status)
-	assert.Equal(t, "Transaction created successfully.", resp.Message)
+	assert.Equal(t, string(models.StatusPending), resp.Status)
+
+	// Verify the transaction in database
+	tx, err := repo.GetById(context.Background(), resp.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, description, tx.Description)
+	assert.Equal(t, amount.String(), tx.AmountUSD.String())
+	assert.Equal(t, models.StatusPending, tx.Status)
+	assert.NotNil(t, tx.CreatedAt)
+	assert.Nil(t, tx.ProcessedAt)
 }
 
 func TestGetTransactionByIDIntegration(t *testing.T) {
+	cleanup(t)
 	router := setupRouter()
 
-	// Create a transaction to fetch
+	// Create a transaction with UTC time
+	now := time.Now().UTC()
+	amount := decimal.NewFromFloat(100.0).Round(2) // Ensure 2 decimal places
+
 	tx := &models.Transaction{
 		ID:              uuid.New(),
 		Description:     "Test Transaction",
-		TransactionDate: time.Now(),
-		AmountUSD:       decimal.NewFromFloat(100.0),
+		TransactionDate: now.Truncate(24 * time.Hour), // Truncate to day precision
+		AmountUSD:       amount,
 		Status:          models.StatusPending,
 	}
 	err := repository.NewTransactionRepository(dbHandler).Create(context.Background(), tx)
@@ -125,15 +148,62 @@ func TestGetTransactionByIDIntegration(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, tx.ID, fetchedTx.ID)
 	assert.Equal(t, tx.Description, fetchedTx.Description)
-	assert.Equal(t, tx.TransactionDate, fetchedTx.TransactionDate)
-	assert.Equal(t, tx.AmountUSD, fetchedTx.AmountUSD)
+
+	// Compare dates after truncating to day precision and converting to UTC
+	expectedDate := tx.TransactionDate.UTC().Truncate(24 * time.Hour)
+	actualDate := fetchedTx.TransactionDate.UTC().Truncate(24 * time.Hour)
+	assert.Equal(t, expectedDate, actualDate)
+
+	// Compare amounts after ensuring same precision
+	expectedAmount := tx.AmountUSD.Round(2)
+	actualAmount := fetchedTx.AmountUSD.Round(2)
+	assert.Equal(t, expectedAmount.String(), actualAmount.String())
+
 	assert.Equal(t, tx.Status, fetchedTx.Status)
 }
 
+func TestListTransactionsIntegration(t *testing.T) {
+	cleanup(t)
+	router := setupRouter()
+	repo := repository.NewTransactionRepository(dbHandler)
+
+	expectedTxs := make([]*models.Transaction, 5)
+	for i := 0; i < 5; i++ {
+		tx := &models.Transaction{
+			ID:              uuid.New(),
+			Description:     fmt.Sprintf("Test Transaction %d", i),
+			TransactionDate: time.Now().AddDate(0, 0, -i), // Different dates
+			AmountUSD:       decimal.NewFromFloat(100.0 + float64(i)),
+			Status:          models.StatusPending,
+		}
+		err := repo.Create(context.Background(), tx)
+		assert.NoError(t, err)
+		expectedTxs[i] = tx
+		time.Sleep(100 * time.Millisecond) // Ensure different created_at times
+	}
+
+	req, _ := http.NewRequest("GET", "/api/v1/transactions?limit=3&offset=0", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+
+	var transactions []models.Transaction
+	err := json.Unmarshal(rr.Body.Bytes(), &transactions)
+	assert.NoError(t, err)
+	assert.Len(t, transactions, 3, "Should return exactly 3 transactions")
+
+	for i := 0; i < len(transactions)-1; i++ {
+		assert.True(t, transactions[i].CreatedAt.After(transactions[i+1].CreatedAt),
+			"Transactions should be ordered by created_at DESC")
+	}
+}
+
 func TestUpdateTransactionStatusIntegration(t *testing.T) {
+	cleanup(t)
 	router := setupRouter()
 
-	// Create a transaction to update
+	// Create a transaction
 	tx := &models.Transaction{
 		ID:              uuid.New(),
 		Description:     "Test Transaction",
@@ -141,9 +211,16 @@ func TestUpdateTransactionStatusIntegration(t *testing.T) {
 		AmountUSD:       decimal.NewFromFloat(100.0),
 		Status:          models.StatusPending,
 	}
-	err := repository.NewTransactionRepository(dbHandler).Create(context.Background(), tx)
+	repo := repository.NewTransactionRepository(dbHandler)
+	err := repo.Create(context.Background(), tx)
 	assert.NoError(t, err)
 
+	// Verify initial status
+	initialTx, err := repo.GetById(context.Background(), tx.ID)
+	assert.NoError(t, err)
+	assert.Equal(t, models.StatusPending, initialTx.Status)
+
+	// Update status
 	reqBody := map[string]string{"status": "COMPLETED"}
 	body, _ := json.Marshal(reqBody)
 	req, _ := http.NewRequest("PATCH", "/api/v1/transactions/"+tx.ID.String()+"/status", bytes.NewBuffer(body))
@@ -154,40 +231,12 @@ func TestUpdateTransactionStatusIntegration(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var resp map[string]string
-	err = json.Unmarshal(rr.Body.Bytes(), &resp)
-	assert.NoError(t, err)
-	assert.Equal(t, "Transaction status updated successfully", resp["message"])
+	// Add a small delay to allow for processing
+	time.Sleep(1 * time.Second)
 
-	updatedTx, err := repository.NewTransactionRepository(dbHandler).GetById(context.Background(), tx.ID)
+	// Verify final status
+	updatedTx, err := repo.GetById(context.Background(), tx.ID)
 	assert.NoError(t, err)
 	assert.Equal(t, models.StatusCompleted, updatedTx.Status)
-}
-
-func TestListTransactionsIntegration(t *testing.T) {
-	router := setupRouter()
-
-	// Create some transactions to list
-	for i := 0; i < 5; i++ {
-		tx := &models.Transaction{
-			ID:              uuid.New(),
-			Description:     fmt.Sprintf("Test Transaction %d", i),
-			TransactionDate: time.Now(),
-			AmountUSD:       decimal.NewFromFloat(100.0),
-			Status:          models.StatusPending,
-		}
-		err := repository.NewTransactionRepository(dbHandler).Create(context.Background(), tx)
-		assert.NoError(t, err)
-	}
-
-	req, _ := http.NewRequest("GET", "/api/v1/transactions", nil)
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-
-	var transactions []models.Transaction
-	err := json.Unmarshal(rr.Body.Bytes(), &transactions)
-	assert.NoError(t, err)
-	assert.Len(t, transactions, 5)
+	assert.NotNil(t, updatedTx.ProcessedAt, "ProcessedAt should be set when status is COMPLETED")
 }

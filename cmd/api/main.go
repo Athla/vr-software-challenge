@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -18,30 +21,28 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
-func gracefulShutdown(apiServer *http.Server, done chan bool) {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+// @title           VR Software Challenge API
+// @version         1.0
+// @description     A transaction processing API with asynchronous queue processing
+// @termsOfService  http://swagger.io/terms/
 
-	<-ctx.Done()
+// @contact.name   API Support
+// @contact.email  guilher.c.rodrigues@gmail.com
 
-	log.Info("shutting down gracefully, press Ctrl+C again to force")
+// @license.name   Unlicense
+// @license.url    https://unlicense.org/
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := apiServer.Shutdown(ctx); err != nil {
-		log.Printf("Server forced to shutdown with error: %v", err)
-	}
-
-	log.Info("Server exiting")
-
-	done <- true
-}
-
+// @host      localhost:8080
+// @BasePath  /api/v1
+// @schemes   http
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Unable to load config: %v", err)
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	db, err := database.NewConnection(cfg.Database)
 	if err != nil {
@@ -49,22 +50,17 @@ func main() {
 	}
 	defer db.Close()
 
-	// Run migrations
-	if err := migrations.Migrate(db, context.Background()); err != nil {
+	if err := migrations.Migrate(db, ctx); err != nil {
 		log.Fatalf("Unable to run migrations: %v", err)
 	}
 
-	// Initialize repositories
 	txRepo := repository.NewTransactionRepository(db)
 
-	// Initialize Kafka producer
 	producer, err := messagery.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
 	if err != nil {
 		log.Fatalf("Unable to create Kafka producer: %v", err)
 	}
-	defer producer.Close()
 
-	// Initialize consumer with handler
 	consumerHandler := func(ctx context.Context, msg *messagery.TransactionMessage) error {
 		return txRepo.UpdateStatus(ctx, msg.ID, models.StatusCompleted)
 	}
@@ -78,26 +74,52 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to create Kafka consumer: %v", err)
 	}
-	defer consumer.Close()
 
-	// Start consumer in background
+	var wg sync.WaitGroup
+
+	wg.Add(1)
 	go func() {
-		if err := consumer.Start(context.Background()); err != nil {
+		defer wg.Done()
+		if err := consumer.Start(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Errorf("Consumer error: %v", err)
 		}
 	}()
 
-	// Initialize HTTP server
 	server := server.NewServer(cfg, db, producer)
 
-	done := make(chan bool, 1)
-	go gracefulShutdown(server, done)
+	serverShutdown := make(chan struct{})
 
-	log.Infof("Server starting on :%d", cfg.App.Port)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server error: %v", err)
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server error: %v", err)
+		}
+		close(serverShutdown)
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Info("Shutting down gracefully...")
+
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Errorf("Server forced to shutdown: %v", err)
 	}
 
-	<-done
-	log.Info("Server stopped gracefully")
+	if err := consumer.Close(); err != nil {
+		log.Errorf("Error closing consumer: %v", err)
+	}
+
+	producer.Close()
+
+	wg.Wait()
+
+	<-serverShutdown
+
+	log.Info("Server exited properly")
 }

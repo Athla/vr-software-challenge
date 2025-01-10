@@ -1,85 +1,206 @@
-# Project vr-software-challenge
+# VR Software Challenge - Transaction Processing API
 
-This project is an HTTP REST application built in Go that stores purchase transactions. It uses PostgreSQL for data storage and Kafka for asynchronous processing.
+A robust HTTP REST API built in Go for processing purchase transactions with asynchronous queue handling. The application provides a reliable way to store and process financial transactions with proper validation and audit logging.
 
-## Getting Started
+## Features
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
+- ✅ RESTful API endpoints for transaction management
+- ✅ Asynchronous processing using Kafka
+- ✅ PostgreSQL for persistent storage
+- ✅ Transaction audit logging
+- ✅ Comprehensive validation
+- ✅ Rate limiting
+- ✅ Health checks
+- ✅ Docker containerization
 
-### Prerequisites
+## Technology Stack
 
-- Docker
-- Docker Compose
+- **Language:** Go 1.23
+- **Database:** PostgreSQL 16
+- **Message Queue:** Apache Kafka
+- **Container:** Docker & Docker Compose
 
-### Installation
+## Prerequisites
+
+- Docker and Docker Compose
+- Go 1.23 or higher (for local development)
+- Make (optional, for using Makefile commands)
+
+## Quick Start
 
 1. Clone the repository:
-
 ```bash
 git clone https://github.com/Athla/vr-software-challenge.git
 cd vr-software-challenge
 ```
 
-2. Create a `.env` file based on the `.env.example` file and update the environment variables as needed.
+2. Copy the environment file and adjust as needed:
+```bash
+cp .env.example .env
+```
+2.1. Copy your .env to the ./config and ./tests, so it can be used throught the application.
 
-3. Build and run the Docker containers:
-
+3. Start the services:
 ```bash
 make docker-run
 ```
 
 4. Run database migrations:
-
 ```bash
 make migrate
 ```
 
-### Running the Application
+## API Documentation
 
-To run the application:
+### Endpoints
 
-```bash
-make run
+#### Create Transaction
+```http
+POST /api/v1/transactions
+
+Request Body:
+{
+    "description": "Office Supplies",
+    "transaction_date": "2024-01-20",
+    "amount_usd": 123.45
+}
+
+Response (201 Created):
+{
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "status": "PENDING",
+    "message": "Transaction created successfully."
+}
 ```
 
-### Running Tests
+#### Get Transaction
+```http
+GET /api/v1/transactions/{id}
 
-To run the test suite:
-
-```bash
-make test
+Response (200 OK):
+{
+    "id": "123e4567-e89b-12d3-a456-426614174000",
+    "description": "Office Supplies",
+    "transaction_date": "2024-01-20T00:00:00Z",
+    "amount_usd": "123.45",
+    "created_at": "2024-01-20T15:30:00Z",
+    "processed_at": null,
+    "status": "PENDING"
+}
 ```
 
-To run integration tests:
+#### Update Transaction Status
+```http
+PATCH /api/v1/transactions/{id}/status
 
-```bash
-make itest
+Request Body:
+{
+    "status": "COMPLETED"
+}
+
+Response (200 OK):
+{
+    "message": "Transaction status updated successfully"
+}
 ```
 
-### Live Reload
+#### List Transactions
+```http
+GET /api/v1/transactions?limit=10&offset=0
 
-To enable live reload during development:
+Response (200 OK):
+[
+    {
+        "id": "123e4567-e89b-12d3-a456-426614174000",
+        "description": "Office Supplies",
+        "transaction_date": "2024-01-20T00:00:00Z",
+        "amount_usd": "123.45",
+        "created_at": "2024-01-20T15:30:00Z",
+        "processed_at": null,
+        "status": "PENDING"
+    },
+    // ... more transactions
+]
+```
 
+### Transaction States
+
+- `PENDING`: Initial state after creation
+- `PROCESSING`: Transaction is being processed
+- `COMPLETED`: Transaction has been successfully processed
+- `FAILED`: Transaction processing failed
+
+### Validation Rules
+
+1. **Description**
+   - Required
+   - Maximum 50 characters
+   - Cannot be empty
+
+2. **Transaction Date**
+   - Required
+   - Must be a valid date (YYYY-MM-DD)
+   - Cannot be in the future
+
+3. **Amount**
+   - Required
+   - Must be positive
+   - Rounded to 2 decimal places
+
+## Development
+
+### Running Locally
+
+1. Start development services:
+```bash
+make docker-run
+```
+
+2. Run with live reload:
 ```bash
 make watch
 ```
 
-### Shutting Down
+### Testing
 
-To shut down the Docker containers:
-
+Run unit tests:
 ```bash
-make docker-down
+make test
 ```
 
-## API Endpoints
+Run integration tests:
+```bash
+make itest
+```
 
-All the endpoints are under the `/api/v1/`:
+### Available Make Commands
 
-- `POST /transactions`: Create a new transaction.
-- `GET /transactions/:id`: Get a transaction by ID.
-- `PATCH /transactions/:id/status`: Update the status of a transaction.
-- `GET /transactions`: List transactions.
+- `make build`: Build the application
+- `make run`: Run the application
+- `make docker-run`: Start all services with Docker
+- `make docker-down`: Stop all services
+- `make migrate`: Run database migrations
+- `make test`: Run unit tests
+- `make itest`: Run integration tests
+- `make watch`: Run with live reload
+- `make clean`: Clean build artifacts
+
+## Monitoring
+
+### Health Check
+
+```http
+GET /health
+
+Response (200 OK):
+{
+    "status": "ok"
+}
+```
+
+The health check endpoint verifies:
+- Database connectivity
+- Kafka connectivity
 
 ## License
 

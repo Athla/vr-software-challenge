@@ -1,6 +1,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/Athla/vr-software-challenge/internal/domain/errors"
@@ -27,7 +28,21 @@ type Transaction struct {
 	Status          TransactionStatus `db:"status" json:"status"`
 }
 
+func (t *Transaction) Standardize() {
+	t.TransactionDate = t.TransactionDate.UTC().Truncate(24 * time.Hour)
+	t.AmountUSD = t.AmountUSD.Round(2)
+	if !t.CreatedAt.IsZero() {
+		t.CreatedAt = t.CreatedAt.UTC()
+	}
+	if t.ProcessedAt != nil {
+		*t.ProcessedAt = t.ProcessedAt.UTC()
+	}
+}
+
 func (t *Transaction) Validate() error {
+	if strings.TrimSpace(t.Description) == "" {
+		return errors.ErrDescriptionEmpty
+	}
 	if len(t.Description) > 50 {
 		return errors.ErrDescriptionTooLong
 	}

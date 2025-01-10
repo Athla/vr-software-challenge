@@ -52,13 +52,16 @@ func (c *Consumer) Start(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		default:
-			msg, err := c.consumer.ReadMessage(time.Millisecond)
+			msg, err := c.consumer.ReadMessage(100 * time.Millisecond)
 			if err != nil {
 				if err.(kafka.Error).IsFatal() {
 					log.Errorf("FATAL ERROR. Unable to read from consumer due: %s", err)
 					return err
 				}
-				log.Warnf("Unable to read message from consumer due: %s", err)
+				if err.(kafka.Error).Code() != kafka.ErrTimedOut {
+					log.Warnf("Unable to read message from consumer due: %s", err)
+					return err
+				}
 				continue
 
 			}

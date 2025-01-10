@@ -60,12 +60,13 @@ func LoadMigrations() ([]Migration, error) {
 }
 
 func Migrate(db *sql.DB, ctx context.Context) error {
+	// Create migrations table if it doesn't exist
 	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS schema_migrations (
-			version INTEGER PRIMARY KEY,
-			applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		)
-		`)
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            version INTEGER PRIMARY KEY,
+            applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+    `)
 	if err != nil {
 		log.Errorf("Unable to check or create migration table due: %v", err)
 		return err
@@ -79,8 +80,7 @@ func Migrate(db *sql.DB, ctx context.Context) error {
 
 	for _, migration := range migrations {
 		var applied bool
-
-		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version) = $1", migration.Version).Scan(&applied)
+		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = $1)", migration.Version).Scan(&applied)
 		if err != nil {
 			log.Errorf("Unable to query 'schema_migrations' due: %v", err)
 			return err
@@ -110,11 +110,10 @@ func Migrate(db *sql.DB, ctx context.Context) error {
 				log.Errorf("Unable to transaction commit due: %v", err)
 				return err
 			}
-			log.Infof("Migration %s applied succesfully!", migration.Filename)
+			log.Infof("Migration %s applied successfully!", migration.Filename)
 		}
 	}
 	log.Info("All migrations have been finished.")
 
 	return nil
-
 }

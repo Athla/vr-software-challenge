@@ -5,8 +5,9 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/joho/godotenv"
+	_ "github.com/joho/godotenv/autoload"
 )
 
 func (c *Config) String() string {
@@ -34,12 +35,15 @@ type AppConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Name     string
-	SSLMode  string
+	Host            string
+	Port            int
+	User            string
+	Password        string
+	Name            string
+	SSLMode         string
+	MaxOpenConns    int    `default:"25"`
+	MaxIdleConns    int    `default:"5"`
+	ConnMaxLifetime string `default:"5m"`
 }
 
 type KafkaConfig struct {
@@ -50,10 +54,6 @@ type KafkaConfig struct {
 }
 
 func Load() (*Config, error) {
-	if err := godotenv.Load(); err != nil {
-		return nil, fmt.Errorf("error loading .env file: %w", err)
-	}
-
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	dbPort, _ := strconv.Atoi(os.Getenv("DB_PORT"))
 	debug, _ := strconv.ParseBool(os.Getenv("DEBUG"))
@@ -126,6 +126,14 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func (cfg *DatabaseConfig) GetConnMaxLifetime() time.Duration {
+	duration, err := time.ParseDuration(cfg.ConnMaxLifetime)
+	if err != nil {
+		return 5 * time.Minute // default
+	}
+	return duration
 }
 
 func (cfg *DatabaseConfig) ConnString() string {

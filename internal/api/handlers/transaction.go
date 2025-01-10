@@ -17,27 +17,53 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// TransactionHandler handles HTTP requests for transactions.
 type TransactionHandler struct {
 	Repo     repository.TransactionRepository
 	Producer messagery.Producerer
 }
 
 // CreateTransactionRequest represents the request body for creating a transaction.
+// @Description Transaction creation request
 type CreateTransactionRequest struct {
-	Description     string          `json:"description"`
-	TransactionDate string          `json:"transaction_date"`
-	AmountUSD       decimal.Decimal `json:"amount_usd"`
+	// Description of the purchase
+	// @Example "Office Supplies"
+	Description string `json:"description" binding:"required" example:"Office Supplies"`
+
+	// Date of the transaction in YYYY-MM-DD format
+	// @Example "2024-01-10"
+	TransactionDate string `json:"transaction_date" binding:"required" example:"2024-01-10"`
+
+	// Amount in USD with up to 2 decimal places
+	// @Example 123.45
+	AmountUSD decimal.Decimal `json:"amount_usd" binding:"required" example:"123.45"`
 }
 
-// CreateTransactionResponse represents the response body for creating a transaction.
+// CreateTransactionResponse represents the response for a transaction creation.
+// @Description Transaction creation response
 type CreateTransactionResponse struct {
-	ID      uuid.UUID `json:"id"`
-	Status  string    `json:"status"`
-	Message string    `json:"message"`
+	// Unique identifier for the transaction
+	// @Example "123e4567-e89b-12d3-a456-426614174000"
+	ID uuid.UUID `json:"id" example:"123e4567-e89b-12d3-a456-426614174000"`
+
+	// Current status of the transaction
+	// @Example "PENDING"
+	Status string `json:"status" example:"PENDING"`
+
+	// Response message
+	// @Example "Transaction created successfully."
+	Message string `json:"message" example:"Transaction created successfully."`
 }
 
-// Create handles the creation of a new transaction.
+// @Summary Create a new transaction
+// @Description Create a new purchase transaction
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param transaction body CreateTransactionRequest true "Transaction Details"
+// @Success 201 {object} CreateTransactionResponse
+// @Failure 400 {object} gin.H
+// @Failure 500 {object} gin.H
+// @Router /transactions [post]
 func (h *TransactionHandler) Create(ctx *gin.Context) {
 	var req CreateTransactionRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -57,7 +83,7 @@ func (h *TransactionHandler) Create(ctx *gin.Context) {
 		ID:              uuid.New(),
 		Description:     req.Description,
 		TransactionDate: date,
-		AmountUSD:       req.AmountUSD,
+		AmountUSD:       req.AmountUSD.Round(2),
 		Status:          models.StatusPending,
 	}
 
@@ -81,16 +107,21 @@ func (h *TransactionHandler) Create(ctx *gin.Context) {
 		CreatedAt:       tx.CreatedAt,
 	}
 
-	if err := h.Producer.PublishTransaction(ctx.Request.Context(), msg); err != nil {
-		for i := 0; i < 3; i++ {
-			if err := h.Producer.PublishTransaction(ctx.Request.Context(), msg); err == nil {
-				break
-			}
+	var publishErr error
+	for i := 0; i < 3; i++ {
+		if err := h.Producer.PublishTransaction(ctx.Request.Context(), msg); err == nil {
+			publishErr = nil
+			break
+		} else {
+			publishErr = err
 			log.Errorf("Retry %d: failed to publish transaction due: %s", i+1, err)
 			time.Sleep(2 * time.Second)
 		}
-		log.Errorf("Unable to publish transaction due: %s", err)
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish transaction"})
+	}
+
+	if publishErr != nil {
+		log.Errorf("Failed to publish transaction after retries: %s", publishErr)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to processes transaction"})
 		return
 	}
 
@@ -101,7 +132,17 @@ func (h *TransactionHandler) Create(ctx *gin.Context) {
 	})
 }
 
-// GetByID handles fetching a transaction by ID.
+// @Summary Get a transaction by ID
+// @Description Get a transaction's details by its ID
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param id path string true "Transaction ID"
+// @Success 200 {object} models.Transaction
+// @Failure 400 {object} gin.H
+// @Failure 404 {object} gin.H
+// @Failure 500 {object} gin.H
+// @Router /transactions/{id} [get]
 func (h *TransactionHandler) GetByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -122,17 +163,28 @@ func (h *TransactionHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, tx)
 }
 
-// UpdateStatus handles updating the status of a transaction.
+// @Summary Update transaction status
+// @Description Update the status of a transaction
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param id path string true "Transaction ID"
+// @Param status body map[string]string true "Status Update"
+// @Success 200 {object} gin.H
+// @Failure 400 {object} gin.H
+// @Failure 404 {object} gin.H
+// @Failure 500 {object} gin.H
+// @Router /transactions/{id}/status [patch]
 func (h *TransactionHandler) UpdateStatus(ctx *gin.Context) {
 	id, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid transaction ID"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid transaction ID format"})
 		return
 	}
 
 	var req map[string]string
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid body request"})
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 		return
 	}
 
@@ -142,6 +194,7 @@ func (h *TransactionHandler) UpdateStatus(ctx *gin.Context) {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "Transaction not found"})
 			return
 		}
+		log.Errorf("Failed to update transaction status: %v", err)
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update transaction status"})
 		return
 	}
@@ -149,7 +202,16 @@ func (h *TransactionHandler) UpdateStatus(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"message": "Transaction status updated successfully"})
 }
 
-// List handles listing transactions with pagination.
+// @Summary List transactions
+// @Description Get a list of transactions with pagination
+// @Tags transactions
+// @Accept json
+// @Produce json
+// @Param limit query int false "Limit" default(10)
+// @Param offset query int false "Offset" default(0)
+// @Success 200 {array} models.Transaction
+// @Failure 500 {object} gin.H
+// @Router /transactions [get]
 func (h *TransactionHandler) List(ctx *gin.Context) {
 	limit := 10
 	offset := 0
@@ -160,7 +222,6 @@ func (h *TransactionHandler) List(ctx *gin.Context) {
 	if o := ctx.Query("offset"); o != "" {
 		offset, _ = strconv.Atoi(o)
 	}
-
 	transactions, err := h.Repo.List(ctx.Request.Context(), limit, offset)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list transactions"})

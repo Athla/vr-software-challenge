@@ -71,6 +71,6 @@ func (p *Producer) PublishTransaction(ctx context.Context, msg *TransactionMessa
 }
 
 func (p *Producer) Close() {
-	p.producer.Flush(15 * 1000)
+	p.producer.Flush(5 * 1000)
 	p.producer.Close()
 }

@@ -36,12 +36,12 @@ func (s *Server) RegisterRoutes() http.Handler {
 		Producer: producer,
 	}
 
-	r.Group("/api/v1")
+	v1 := r.Group("/api/v1")
 	{
-		r.POST("/transactions", transactionHandler.Create)
-		r.GET("/transactions/:id", transactionHandler.GetByID)
-		r.PATCH("/transactions/:id/status", transactionHandler.UpdateStatus)
-		r.GET("/transactions", transactionHandler.List)
+		v1.POST("/transactions", transactionHandler.Create)
+		v1.GET("/transactions/:id", transactionHandler.GetByID)
+		v1.PATCH("/transactions/:id/status", transactionHandler.UpdateStatus)
+		v1.GET("/transactions", transactionHandler.List)
 	}
 
 	r.GET("/health", func(ctx *gin.Context) {

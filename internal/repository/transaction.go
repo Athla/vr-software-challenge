@@ -33,6 +33,7 @@ func NewTransactionRepository(db *sql.DB) TransactionRepository {
 
 // Create inserts a new transaction into the database.
 func (r *postgresTransactionRepo) Create(ctx context.Context, tx *models.Transaction) error {
+	tx.Standardize()
 	query := `
 		INSERT INTO transactions (
 			id, description, transaction_date, amount_usd, status
@@ -82,33 +83,31 @@ func (r *postgresTransactionRepo) GetById(ctx context.Context, id uuid.UUID) (*m
 		return nil, err
 	}
 
+	tx.Standardize()
 	return tx, nil
 }
 
 // UpdateStatus updates the status of a transaction in the database.
 func (r *postgresTransactionRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TransactionStatus) error {
 	query := `
-		UPDATE transactions
-		SET status = $1,
-			processed_at = CASE
-				WHEN $1 = 'COMPLETED' THEN CURRENT_TIMESTAMP
-				ELSE processed_at
-			END
-		WHERE id = $2
-	`
-	result, err := r.db.ExecContext(ctx, query, status, id)
+        UPDATE transactions
+        SET status = $1::transaction_status,
+            processed_at = CASE
+                WHEN $1::transaction_status = 'COMPLETED' THEN CURRENT_TIMESTAMP
+                ELSE processed_at
+            END
+        WHERE id = $2
+        RETURNING id
+    `
+
+	var returnedID uuid.UUID
+	err := r.db.QueryRowContext(ctx, query, string(status), id).Scan(&returnedID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.ErrTransactionNotFound
+		}
 		log.Errorf("Unable to update transaction status due: %v", err)
 		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		log.Errorf("Unable to check number of rows affected due: %v", err)
-		return err
-	}
-	if rows == 0 {
-		log.Errorf("Transaction not found: %s", err)
-		return errors.ErrTransactionNotFound
 	}
 
 	return nil

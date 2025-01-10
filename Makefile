@@ -13,12 +13,16 @@ run:
 
 # Create DB container
 docker-run:
-	@if docker compose up --build 2>/dev/null; then \
+	@echo "Generating Swagger documentation..."
+	@if docker compose up -d --build 2>/dev/null; then \
 		: ; \
 	else \
 		echo "Falling back to Docker Compose V1"; \
-		docker compose up --build; \
+		docker compose up -d --build; \
 	fi
+	@echo "Services are starting..."
+	@echo "API will be available at http://localhost:8080"
+	@echo "Swagger UI will be available at http://localhost:8080/swagger/index.html"
 
 # Shutdown DB container
 docker-down:
@@ -31,7 +35,8 @@ docker-down:
 
 # Run database migrations
 migrate:
-	@go run migrations/migrate.go
+	@echo "Running migrations..."
+	@go run cmd/migrate/main.go
 
 # Test the application
 test:
