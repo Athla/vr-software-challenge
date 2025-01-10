@@ -3,7 +3,6 @@ package database
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/Athla/vr-software-challenge/config"
@@ -12,18 +11,9 @@ import (
 	_ "github.com/joho/godotenv/autoload"
 )
 
-type DbHandler struct {
-	db  *sql.DB
-	ctx context.Context
-}
-
-func NewConnection(cfg config.DatabaseConfig) (*DbHandler, error) {
-	connString := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.SSLMode,
-	)
-
-	db, err := sql.Open("postgres", connString)
+func NewConnection(cfg config.DatabaseConfig) (*sql.DB, error) {
+	connString := cfg.ConnString()
+	db, err := sql.Open("pgx", connString)
 	if err != nil {
 		log.Errorf("Unable to open database due: %v", err)
 		return nil, err
@@ -43,13 +33,11 @@ func NewConnection(cfg config.DatabaseConfig) (*DbHandler, error) {
 		return nil, err
 	}
 
-	return &DbHandler{
-		db: db,
-	}, nil
+	return db, nil
 }
 
-func (db *DbHandler) Transaction(fn func(*sql.Tx) error) error {
-	tx, err := db.db.BeginTx(db.ctx, &sql.TxOptions{
+func Transaction(db *sql.DB, fn func(*sql.Tx) error) error {
+	tx, err := db.BeginTx(context.Background(), &sql.TxOptions{
 		Isolation: sql.LevelReadCommitted,
 		ReadOnly:  false,
 	})

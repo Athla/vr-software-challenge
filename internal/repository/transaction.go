@@ -109,9 +109,9 @@ func (r *postgresTransactionRepo) UpdateStatus(ctx context.Context, id uuid.UUID
 
 func (r *postgresTransactionRepo) List(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
 	query := `
-        SELECT id, description, transaction_date, amount_usd, 
+        SELECT id, description, transaction_date, amount_usd,
                created_at, processed_at, status
-        FROM transactions 
+        FROM transactions
         ORDER BY created_at DESC
         LIMIT $1 OFFSET $2`
 

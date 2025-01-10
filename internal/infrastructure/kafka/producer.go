@@ -9,6 +9,10 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
 
+type Producerer interface {
+	PublishTransaction(ctx context.Context, msg *TransactionMessage) error
+	Close()
+}
 type Producer struct {
 	producer *kafka.Producer
 	topic    string
@@ -33,7 +37,7 @@ func NewProducer(brokers []string, topic string) (*Producer, error) {
 			switch ev := e.(type) {
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
-					// Add further failure and retries in case of failure. Max retries defined later, default to 3.
+
 					log.Errorf("Delivery in the queue failed due: %v", ev.TopicPartition.Error)
 				}
 			}

@@ -92,6 +92,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("unmarshaling config: %w", err)
 	}
 
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("validating config: %w", err)
+	}
+
 	return &config, nil
 }
 
@@ -109,4 +113,11 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+func (cfg *DatabaseConfig) ConnString() string {
+	return fmt.Sprintf(
+		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.SSLMode,
+	)
 }
