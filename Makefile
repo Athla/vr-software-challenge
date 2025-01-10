@@ -5,20 +5,19 @@ all: build test
 
 build:
 	@echo "Building..."
-	
-	
 	@go build -o main cmd/api/main.go
 
 # Run the application
 run:
 	@go run cmd/api/main.go
+
 # Create DB container
 docker-run:
 	@if docker compose up --build 2>/dev/null; then \
 		: ; \
 	else \
 		echo "Falling back to Docker Compose V1"; \
-		docker-compose up --build; \
+		docker compose up --build; \
 	fi
 
 # Shutdown DB container
@@ -27,17 +26,22 @@ docker-down:
 		: ; \
 	else \
 		echo "Falling back to Docker Compose V1"; \
-		docker-compose down; \
+		docker compose down; \
 	fi
+
+# Run database migrations
+migrate:
+	@go run migrations/migrate.go
 
 # Test the application
 test:
 	@echo "Testing..."
 	@go test ./... -v
-# Integrations Tests for the application
+
+# Integration Tests for the application
 itest:
 	@echo "Running integration tests..."
-	@go test ./internal/database -v
+	@go test ./tests -v
 
 # Clean the binary
 clean:
@@ -61,4 +65,4 @@ watch:
             fi; \
         fi
 
-.PHONY: all build run test clean watch docker-run docker-down itest
+.PHONY: all build run test clean watch docker-run docker-down itest migrate

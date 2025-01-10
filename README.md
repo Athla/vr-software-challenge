@@ -1,53 +1,86 @@
 # Project vr-software-challenge
 
-One Paragraph of project description goes here
+This project is an HTTP REST application built in Go that stores purchase transactions. It uses PostgreSQL for data storage and Kafka for asynchronous processing.
 
 ## Getting Started
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+These instructions will get you a copy of the project up and running on your local machine for development and testing purposes.
 
-## MakeFile
+### Prerequisites
 
-Run build make command with tests
+- Docker
+- Docker Compose
+
+### Installation
+
+1. Clone the repository:
+
 ```bash
-make all
+git clone https://github.com/Athla/vr-software-challenge.git
+cd vr-software-challenge
 ```
 
-Build the application
-```bash
-make build
-```
+2. Create a `.env` file based on the `.env.example` file and update the environment variables as needed.
 
-Run the application
-```bash
-make run
-```
-Create DB container
+3. Build and run the Docker containers:
+
 ```bash
 make docker-run
 ```
 
-Shutdown DB Container
+4. Run database migrations:
+
 ```bash
-make docker-down
+make migrate
 ```
 
-DB Integrations Test:
+### Running the Application
+
+To run the application:
+
 ```bash
-make itest
+make run
 ```
 
-Live reload the application:
-```bash
-make watch
-```
+### Running Tests
 
-Run the test suite:
+To run the test suite:
+
 ```bash
 make test
 ```
 
-Clean up binary from the last build:
+To run integration tests:
+
 ```bash
-make clean
+make itest
 ```
+
+### Live Reload
+
+To enable live reload during development:
+
+```bash
+make watch
+```
+
+### Shutting Down
+
+To shut down the Docker containers:
+
+```bash
+make docker-down
+```
+
+## API Endpoints
+
+All the endpoints are under the `/api/v1/`:
+
+- `POST /transactions`: Create a new transaction.
+- `GET /transactions/:id`: Get a transaction by ID.
+- `PATCH /transactions/:id/status`: Update the status of a transaction.
+- `GET /transactions`: List transactions.
+
+## License
+
+This project is licensed under the Unlicense License - see the [LICENSE](LICENSE) file for details.

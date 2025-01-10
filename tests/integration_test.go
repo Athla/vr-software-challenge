@@ -16,7 +16,7 @@ import (
 	"github.com/Athla/vr-software-challenge/internal/api/handlers"
 	"github.com/Athla/vr-software-challenge/internal/domain/models"
 	"github.com/Athla/vr-software-challenge/internal/infrastructure/database"
-	"github.com/Athla/vr-software-challenge/internal/infrastructure/kafka"
+	"github.com/Athla/vr-software-challenge/internal/infrastructure/messagery"
 	"github.com/Athla/vr-software-challenge/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -26,7 +26,7 @@ import (
 
 var (
 	dbHandler *sql.DB
-	producer  kafka.Producerer
+	producer  messagery.Producerer
 	cfg       *config.Config
 )
 
@@ -44,7 +44,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	producer, err = kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.TransactionTopic)
+	producer, err = messagery.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
 	if err != nil {
 		fmt.Printf("Unable to create Kafka producer: %v\n", err)
 		os.Exit(1)
@@ -67,10 +67,10 @@ func setupRouter() *gin.Engine {
 		Producer: producer,
 	}
 
-	router.POST("/transactions", transactionHandler.Create)
-	router.GET("/transactions/:id", transactionHandler.GetByID)
-	router.PATCH("/transactions/:id/status", transactionHandler.UpdateStatus)
-	router.GET("/transactions", transactionHandler.List)
+	router.POST("/api/v1/transactions", transactionHandler.Create)
+	router.GET("/api/v1/transactions/:id", transactionHandler.GetByID)
+	router.PATCH("/api/v1/transactions/:id/status", transactionHandler.UpdateStatus)
+	router.GET("/api/v1/transactions", transactionHandler.List)
 
 	return router
 }
@@ -84,7 +84,7 @@ func TestCreateTransactionIntegration(t *testing.T) {
 		AmountUSD:       decimal.NewFromFloat(100.0),
 	}
 	body, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("POST", "/transactions", bytes.NewBuffer(body))
+	req, _ := http.NewRequest("POST", "/api/v1/transactions", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
@@ -114,7 +114,7 @@ func TestGetTransactionByIDIntegration(t *testing.T) {
 	err := repository.NewTransactionRepository(dbHandler).Create(context.Background(), tx)
 	assert.NoError(t, err)
 
-	req, _ := http.NewRequest("GET", "/transactions/"+tx.ID.String(), nil)
+	req, _ := http.NewRequest("GET", "/api/v1/transactions/"+tx.ID.String(), nil)
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 
@@ -146,7 +146,7 @@ func TestUpdateTransactionStatusIntegration(t *testing.T) {
 
 	reqBody := map[string]string{"status": "COMPLETED"}
 	body, _ := json.Marshal(reqBody)
-	req, _ := http.NewRequest("PATCH", "/transactions/"+tx.ID.String()+"/status", bytes.NewBuffer(body))
+	req, _ := http.NewRequest("PATCH", "/api/v1/transactions/"+tx.ID.String()+"/status", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	rr := httptest.NewRecorder()
@@ -180,7 +180,7 @@ func TestListTransactionsIntegration(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	req, _ := http.NewRequest("GET", "/transactions", nil)
+	req, _ := http.NewRequest("GET", "/api/v1/transactions", nil)
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 

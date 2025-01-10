@@ -12,7 +12,7 @@ import (
 
 	"github.com/Athla/vr-software-challenge/internal/api/handlers"
 	"github.com/Athla/vr-software-challenge/internal/domain/models"
-	"github.com/Athla/vr-software-challenge/internal/infrastructure/kafka"
+	"github.com/Athla/vr-software-challenge/internal/infrastructure/messagery"
 	"github.com/Athla/vr-software-challenge/internal/repository"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,7 +22,7 @@ import (
 
 func TestCreateTransaction(t *testing.T) {
 	repo := repository.NewMockTransactionRepository()
-	producer := kafka.NewMockProducer()
+	producer := messagery.NewMockProducer()
 	handler := handlers.TransactionHandler{
 		Repo:     repo,
 		Producer: producer,
@@ -56,7 +56,7 @@ func TestCreateTransaction(t *testing.T) {
 
 func TestGetTransactionByID(t *testing.T) {
 	repo := repository.NewMockTransactionRepository()
-	producer := kafka.NewMockProducer()
+	producer := messagery.NewMockProducer()
 	handler := handlers.TransactionHandler{
 		Repo:     repo,
 		Producer: producer,
@@ -94,7 +94,7 @@ func TestGetTransactionByID(t *testing.T) {
 
 func TestUpdateTransactionStatus(t *testing.T) {
 	repo := repository.NewMockTransactionRepository()
-	producer := kafka.NewMockProducer()
+	producer := messagery.NewMockProducer()
 	handler := handlers.TransactionHandler{
 		Repo:     repo,
 		Producer: producer,
@@ -135,7 +135,7 @@ func TestUpdateTransactionStatus(t *testing.T) {
 
 func TestListTransactions(t *testing.T) {
 	repo := repository.NewMockTransactionRepository()
-	producer := kafka.NewMockProducer()
+	producer := messagery.NewMockProducer()
 	handler := handlers.TransactionHandler{
 		Repo:     repo,
 		Producer: producer,

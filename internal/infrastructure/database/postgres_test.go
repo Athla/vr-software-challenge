@@ -14,7 +14,7 @@ func TestNewConnection(t *testing.T) {
 		Port:     5432,
 		User:     "checkout_user",
 		Password: "checkout_password",
-		Database: "vr_checkout_db",
+		Name:     "vr_checkout_db",
 		SSLMode:  "disable",
 	}
 	dbHandler, err := database.NewConnection(cfg)

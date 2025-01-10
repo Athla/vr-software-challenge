@@ -8,7 +8,7 @@ import (
 
 	"github.com/Athla/vr-software-challenge/internal/domain/errors"
 	"github.com/Athla/vr-software-challenge/internal/domain/models"
-	"github.com/Athla/vr-software-challenge/internal/infrastructure/kafka"
+	"github.com/Athla/vr-software-challenge/internal/infrastructure/messagery"
 	"github.com/Athla/vr-software-challenge/internal/repository"
 	"github.com/charmbracelet/log"
 
@@ -17,32 +17,38 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// TransactionHandler handles HTTP requests for transactions.
 type TransactionHandler struct {
 	Repo     repository.TransactionRepository
-	Producer kafka.Producerer
+	Producer messagery.Producerer
 }
 
+// CreateTransactionRequest represents the request body for creating a transaction.
 type CreateTransactionRequest struct {
 	Description     string          `json:"description"`
 	TransactionDate string          `json:"transaction_date"`
 	AmountUSD       decimal.Decimal `json:"amount_usd"`
 }
 
+// CreateTransactionResponse represents the response body for creating a transaction.
 type CreateTransactionResponse struct {
 	ID      uuid.UUID `json:"id"`
 	Status  string    `json:"status"`
 	Message string    `json:"message"`
 }
 
+// Create handles the creation of a new transaction.
 func (h *TransactionHandler) Create(ctx *gin.Context) {
 	var req CreateTransactionRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid body request"})
+		log.Errorf("Invalid body request: %s", err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format."})
 		return
 	}
 
 	date, err := time.Parse("2006-01-02", req.TransactionDate)
 	if err != nil {
+		log.Errorf("Invalid transaction date format: %s", err)
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid transaction date format"})
 		return
 	}
@@ -56,7 +62,8 @@ func (h *TransactionHandler) Create(ctx *gin.Context) {
 	}
 
 	if err := tx.Validate(); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Transaction already in database."})
+		log.Errorf("Transaction validation failed due: %s", err)
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -66,7 +73,7 @@ func (h *TransactionHandler) Create(ctx *gin.Context) {
 		return
 	}
 
-	msg := &kafka.TransactionMessage{
+	msg := &messagery.TransactionMessage{
 		ID:              tx.ID,
 		Description:     tx.Description,
 		TransactionDate: tx.TransactionDate,
@@ -83,6 +90,7 @@ func (h *TransactionHandler) Create(ctx *gin.Context) {
 			time.Sleep(2 * time.Second)
 		}
 		log.Errorf("Unable to publish transaction due: %s", err)
+		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to publish transaction"})
 		return
 	}
 
@@ -93,6 +101,7 @@ func (h *TransactionHandler) Create(ctx *gin.Context) {
 	})
 }
 
+// GetByID handles fetching a transaction by ID.
 func (h *TransactionHandler) GetByID(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -113,6 +122,7 @@ func (h *TransactionHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, tx)
 }
 
+// UpdateStatus handles updating the status of a transaction.
 func (h *TransactionHandler) UpdateStatus(ctx *gin.Context) {
 	id, err := uuid.Parse(ctx.Param("id"))
 	if err != nil {
@@ -139,6 +149,7 @@ func (h *TransactionHandler) UpdateStatus(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"message": "Transaction status updated successfully"})
 }
 
+// List handles listing transactions with pagination.
 func (h *TransactionHandler) List(ctx *gin.Context) {
 	limit := 10
 	offset := 0

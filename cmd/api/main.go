@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os/signal"
 	"syscall"
@@ -10,6 +9,11 @@ import (
 
 	"github.com/Athla/vr-software-challenge/config"
 	"github.com/Athla/vr-software-challenge/internal/api/server"
+	"github.com/Athla/vr-software-challenge/internal/domain/models"
+	"github.com/Athla/vr-software-challenge/internal/infrastructure/database"
+	"github.com/Athla/vr-software-challenge/internal/infrastructure/messagery"
+	"github.com/Athla/vr-software-challenge/internal/repository"
+	"github.com/Athla/vr-software-challenge/migrations"
 	"github.com/charmbracelet/log"
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -36,23 +40,64 @@ func gracefulShutdown(apiServer *http.Server, done chan bool) {
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Errorf("Unable to load config due: %v", err)
-		return
+		log.Fatalf("Unable to load config: %v", err)
 	}
-	server := server.NewServer(cfg)
 
-	// Create a done channel to signal when the shutdown is complete
+	db, err := database.NewConnection(cfg.Database)
+	if err != nil {
+		log.Fatalf("Unable to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// Run migrations
+	if err := migrations.Migrate(db, context.Background()); err != nil {
+		log.Fatalf("Unable to run migrations: %v", err)
+	}
+
+	// Initialize repositories
+	txRepo := repository.NewTransactionRepository(db)
+
+	// Initialize Kafka producer
+	producer, err := messagery.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topic)
+	if err != nil {
+		log.Fatalf("Unable to create Kafka producer: %v", err)
+	}
+	defer producer.Close()
+
+	// Initialize consumer with handler
+	consumerHandler := func(ctx context.Context, msg *messagery.TransactionMessage) error {
+		return txRepo.UpdateStatus(ctx, msg.ID, models.StatusCompleted)
+	}
+
+	consumer, err := messagery.NewConsumer(
+		cfg.Kafka.Brokers,
+		cfg.Kafka.GroupID,
+		cfg.Kafka.Topic,
+		consumerHandler,
+	)
+	if err != nil {
+		log.Fatalf("Unable to create Kafka consumer: %v", err)
+	}
+	defer consumer.Close()
+
+	// Start consumer in background
+	go func() {
+		if err := consumer.Start(context.Background()); err != nil {
+			log.Errorf("Consumer error: %v", err)
+		}
+	}()
+
+	// Initialize HTTP server
+	server := server.NewServer(cfg, db, producer)
+
 	done := make(chan bool, 1)
-
-	// Run graceful shutdown in a separate goroutine
 	go gracefulShutdown(server, done)
 
-	err = server.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
-		panic(fmt.Sprintf("http server error: %s", err))
+	log.Infof("Server starting on :%d", cfg.App.Port)
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Server error: %v", err)
 	}
 
-	// Wait for the graceful shutdown to complete
 	<-done
-	log.Info("Graceful shutdown complete.")
+	log.Info("Server stopped gracefully")
 }

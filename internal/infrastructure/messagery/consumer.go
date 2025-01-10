@@ -1,4 +1,4 @@
-package kafka
+package messagery
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"encoding/json"
+
 	"github.com/charmbracelet/log"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )

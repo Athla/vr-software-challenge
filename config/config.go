@@ -2,24 +2,31 @@ package config
 
 import (
 	"fmt"
-	"time"
+	"os"
+	"strconv"
+	"strings"
 
-	"github.com/spf13/viper"
+	"github.com/joho/godotenv"
 )
 
+func (c *Config) String() string {
+	return fmt.Sprintf(
+		"Config{App: {Env: %s, Port: %d, Debug: %v, LogLevel: %s}, "+
+			"Database: {Host: %s, Port: %d, User: %s, Name: %s, SSLMode: %s}, "+
+			"Kafka: {Brokers: %v, GroupID: %s, Topic: %s, ClientID: %s}}",
+		c.App.Env, c.App.Port, c.App.Debug, c.App.LogLevel,
+		c.Database.Host, c.Database.Port, c.Database.User, c.Database.Name, c.Database.SSLMode,
+		c.Kafka.Brokers, c.Kafka.GroupID, c.Kafka.Topic, c.Kafka.ClientID,
+	)
+}
+
 type Config struct {
-	App       AppConfig
-	Database  DatabaseConfig
-	Kafka     KafkaConfig
-	Treasury  TreasuryConfig
-	Server    ServerConfig
-	Security  SecurityConfig
-	RateLimit RateLimitConfig
-	Metrics   MetricsConfig
+	App      AppConfig
+	Database DatabaseConfig
+	Kafka    KafkaConfig
 }
 
 type AppConfig struct {
-	Name     string
 	Env      string
 	Port     int
 	Debug    bool
@@ -27,76 +34,58 @@ type AppConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host         string
-	Port         int
-	User         string
-	Password     string
-	Database     string
-	SSLMode      string
-	MaxOpenConns int
-	MaxIdleConns int
+	Host     string
+	Port     int
+	User     string
+	Password string
+	Name     string
+	SSLMode  string
 }
 
 type KafkaConfig struct {
-	Brokers          []string
-	GroupID          string
-	TransactionTopic string
-	ClientID         string
-	AutoOffsetReset  string
-	EnableAutoCommit bool
-}
-
-type TreasuryConfig struct {
-	APIURL        string
-	Timeout       time.Duration
-	CacheDuration time.Duration
-}
-
-type ServerConfig struct {
-	ReadTimeout     time.Duration
-	WriteTimeout    time.Duration
-	IdleTimeout     time.Duration
-	ShutdownTimeout time.Duration
-}
-
-type SecurityConfig struct {
-	CORSAllowedOrigins []string
-	CORSAllowedMethods []string
-	CORSAllowedHeaders []string
-	CORSMaxAge         int
-}
-
-type RateLimitConfig struct {
-	Requests int
-	Duration time.Duration
-}
-
-type MetricsConfig struct {
-	Enabled bool
-	Port    int
+	Brokers  []string
+	GroupID  string
+	Topic    string
+	ClientID string
 }
 
 func Load() (*Config, error) {
-	viper.SetConfigName(".env")
-	viper.SetConfigType("env")
-	viper.AddConfigPath(".")
-
-	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("reading config file: %w", err)
+	if err := godotenv.Load(); err != nil {
+		return nil, fmt.Errorf("error loading .env file: %w", err)
 	}
 
-	var config Config
-	if err := viper.Unmarshal(&config); err != nil {
-		return nil, fmt.Errorf("unmarshaling config: %w", err)
+	port, _ := strconv.Atoi(os.Getenv("PORT"))
+	dbPort, _ := strconv.Atoi(os.Getenv("DB_PORT"))
+	debug, _ := strconv.ParseBool(os.Getenv("DEBUG"))
+
+	config := &Config{
+		App: AppConfig{
+			Env:      os.Getenv("APP_ENV"),
+			Port:     port,
+			Debug:    debug,
+			LogLevel: os.Getenv("LOG_LEVEL"),
+		},
+		Database: DatabaseConfig{
+			Host:     os.Getenv("DB_HOST"),
+			Port:     dbPort,
+			User:     os.Getenv("DB_USER"),
+			Password: os.Getenv("DB_PASSWORD"),
+			Name:     os.Getenv("DB_NAME"),
+			SSLMode:  os.Getenv("DB_SSL_MODE"),
+		},
+		Kafka: KafkaConfig{
+			Brokers:  strings.Split(os.Getenv("KAFKA_BROKERS"), ","),
+			GroupID:  os.Getenv("KAFKA_GROUP_ID"),
+			Topic:    os.Getenv("KAFKA_TOPIC"),
+			ClientID: os.Getenv("KAFKA_CLIENT_ID"),
+		},
 	}
 
 	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("validating config: %w", err)
+		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	return &config, nil
+	return config, nil
 }
 
 func (c *Config) Validate() error {
@@ -104,12 +93,36 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid port number: %d", c.App.Port)
 	}
 
-	if c.Database.MaxOpenConns < c.Database.MaxIdleConns {
-		return fmt.Errorf("maxOpenConns must be greater than or equal to maxIdleConns")
+	if c.Database.Host == "" {
+		return fmt.Errorf("database host is required")
+	}
+
+	if c.Database.Port <= 0 {
+		return fmt.Errorf("invalid database port")
+	}
+
+	if c.Database.User == "" {
+		return fmt.Errorf("database user is required")
+	}
+
+	if c.Database.Password == "" {
+		return fmt.Errorf("database password is required")
+	}
+
+	if c.Database.Name == "" {
+		return fmt.Errorf("database name is required")
 	}
 
 	if len(c.Kafka.Brokers) == 0 {
-		return fmt.Errorf("at least one Kafka broker must be configured")
+		return fmt.Errorf("at least one Kafka broker is required")
+	}
+
+	if c.Kafka.GroupID == "" {
+		return fmt.Errorf("Kafka group ID is required")
+	}
+
+	if c.Kafka.Topic == "" {
+		return fmt.Errorf("Kafka topic is required")
 	}
 
 	return nil
@@ -118,6 +131,6 @@ func (c *Config) Validate() error {
 func (cfg *DatabaseConfig) ConnString() string {
 	return fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Database, cfg.SSLMode,
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name, cfg.SSLMode,
 	)
 }

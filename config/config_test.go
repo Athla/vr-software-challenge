@@ -9,24 +9,16 @@ import (
 
 func TestLoadConfig(t *testing.T) {
 	cfg, err := config.Load()
+	if err != nil {
+		t.Errorf("Unable to load config due: %s", err)
+		return
+	}
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 }
 
 func TestValidateConfig(t *testing.T) {
-	cfg := &config.Config{
-		App: config.AppConfig{
-			Port: 8080,
-		},
-		Database: config.DatabaseConfig{
-			MaxOpenConns: 10,
-			MaxIdleConns: 5,
-		},
-		Kafka: config.KafkaConfig{
-			Brokers: []string{"localhost:9092"},
-		},
-	}
-
+	cfg, _ := config.Load()
 	err := cfg.Validate()
 	assert.NoError(t, err)
 }

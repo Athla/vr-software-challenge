@@ -1,4 +1,4 @@
-package kafka
+package messagery
 
 import (
 	"github.com/prometheus/client_golang/prometheus"

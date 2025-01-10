@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// TransactionRepository defines the interface for transaction repository.
 type TransactionRepository interface {
 	Create(ctx context.Context, tx *models.Transaction) error
 	GetById(ctx context.Context, id uuid.UUID) (*models.Transaction, error)
@@ -18,16 +19,19 @@ type TransactionRepository interface {
 	List(ctx context.Context, limit, offset int) ([]models.Transaction, error)
 }
 
+// postgresTransactionRepo implements the TransactionRepository interface for PostgreSQL.
 type postgresTransactionRepo struct {
 	db *sql.DB
 }
 
+// NewTransactionRepository creates a new instance of postgresTransactionRepo.
 func NewTransactionRepository(db *sql.DB) TransactionRepository {
 	return &postgresTransactionRepo{
 		db: db,
 	}
 }
 
+// Create inserts a new transaction into the database.
 func (r *postgresTransactionRepo) Create(ctx context.Context, tx *models.Transaction) error {
 	query := `
 		INSERT INTO transactions (
@@ -52,6 +56,7 @@ func (r *postgresTransactionRepo) Create(ctx context.Context, tx *models.Transac
 	return nil
 }
 
+// GetById fetches a transaction by ID from the database.
 func (r *postgresTransactionRepo) GetById(ctx context.Context, id uuid.UUID) (*models.Transaction, error) {
 	query := `
 	SELECT id, description, transaction_date, amount_usd, created_at, processed_at, status
@@ -70,7 +75,7 @@ func (r *postgresTransactionRepo) GetById(ctx context.Context, id uuid.UUID) (*m
 		&tx.Status,
 	); err != nil {
 		if go_errors.Is(err, sql.ErrNoRows) {
-			log.Error(errors.ErrTransactionNotFound)
+			log.Errorf("Transaction not found: %s", err)
 			return nil, errors.ErrTransactionNotFound
 		}
 		log.Errorf("Unable to fetch transaction due: %v", err)
@@ -80,6 +85,7 @@ func (r *postgresTransactionRepo) GetById(ctx context.Context, id uuid.UUID) (*m
 	return tx, nil
 }
 
+// UpdateStatus updates the status of a transaction in the database.
 func (r *postgresTransactionRepo) UpdateStatus(ctx context.Context, id uuid.UUID, status models.TransactionStatus) error {
 	query := `
 		UPDATE transactions
@@ -101,12 +107,14 @@ func (r *postgresTransactionRepo) UpdateStatus(ctx context.Context, id uuid.UUID
 		return err
 	}
 	if rows == 0 {
+		log.Errorf("Transaction not found: %s", err)
 		return errors.ErrTransactionNotFound
 	}
 
 	return nil
 }
 
+// List fetches a list of transactions from the database with pagination.
 func (r *postgresTransactionRepo) List(ctx context.Context, limit, offset int) ([]models.Transaction, error) {
 	query := `
         SELECT id, description, transaction_date, amount_usd,
