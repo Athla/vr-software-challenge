@@ -27,7 +27,6 @@ RUN apk add --no-cache librdkafka-dev ca-certificates
 
 WORKDIR /app
 COPY --from=build /app/main .
-COPY docs/ docs/
 
 EXPOSE 8080
 CMD ["./main"]

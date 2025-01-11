@@ -20,9 +20,9 @@ docker-run:
 		echo "Falling back to Docker Compose V1"; \
 		docker compose up -d --build; \
 	fi
+	make migrate
 	@echo "Services are starting..."
 	@echo "API will be available at http://localhost:8080"
-	@echo "Swagger UI will be available at http://localhost:8080/swagger/index.html"
 
 # Shutdown DB container
 docker-down:
