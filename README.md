@@ -276,12 +276,9 @@ jobs:
       - name: Deploy to Production
         run: |
           echo "Deploying to production..."
-          # Add your deployment script here
 ```
 
 ### API Documentation with Swagger
-
-Swagger provides a user-friendly interface for API documentation and testing.
 
 1. **Install Swagger:**
    - Add Swagger dependencies to your project.
