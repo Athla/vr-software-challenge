@@ -12,4 +12,8 @@ var (
 	ErrDatabaseConnection     = errors.New("database connection error")
 	ErrConcurrentModification = errors.New("concurrent modification detected")
 	ErrDescriptionEmpty       = errors.New("description cannot be empty")
+	ErrNoValidExchangeRate    = errors.New("no valid exchange rate found within 6 months of transaction date")
+	ErrInvalidCurrency        = errors.New("invalid currency code")
+	ErrTreasuryAPIError       = errors.New("treasury API error")
+	ErrConversionFailed       = errors.New("currency conversion failed")
 )

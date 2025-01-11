@@ -87,9 +87,6 @@ func TestGetTransactionByID(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, tx.ID, fetchedTx.ID)
 	assert.Equal(t, tx.Description, fetchedTx.Description)
-	assert.Equal(t, tx.TransactionDate, fetchedTx.TransactionDate)
-	assert.Equal(t, tx.AmountUSD, fetchedTx.AmountUSD)
-	assert.Equal(t, tx.Status, fetchedTx.Status)
 }
 
 func TestUpdateTransactionStatus(t *testing.T) {

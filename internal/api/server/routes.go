@@ -5,7 +5,9 @@ import (
 
 	"github.com/Athla/vr-software-challenge/internal/api/handlers"
 	"github.com/Athla/vr-software-challenge/internal/infrastructure/messagery"
+	"github.com/Athla/vr-software-challenge/internal/infrastructure/treasury"
 	"github.com/Athla/vr-software-challenge/internal/repository"
+	"github.com/Athla/vr-software-challenge/internal/service"
 	"github.com/charmbracelet/log"
 	"github.com/didip/tollbooth"
 	"github.com/didip/tollbooth_gin"
@@ -36,8 +38,17 @@ func (s *Server) RegisterRoutes() http.Handler {
 		Producer: producer,
 	}
 
+	currencyService := service.NewCurrencyService(
+		treasury.NewClient(),
+		repository.NewTransactionRepository(s.db),
+	)
+
+	currencyHandler := handlers.CurrencyHandler{
+		CurrencyService: currencyService,
+	}
 	v1 := r.Group("/api/v1")
 	{
+		v1.GET("/transactions/:id/convert", currencyHandler.ConvertCurrency)
 		v1.POST("/transactions", transactionHandler.Create)
 		v1.GET("/transactions/:id", transactionHandler.GetByID)
 		v1.PATCH("/transactions/:id/status", transactionHandler.UpdateStatus)

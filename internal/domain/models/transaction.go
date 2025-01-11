@@ -51,7 +51,7 @@ func (t *Transaction) Validate() error {
 		return errors.ErrInvalidAmount
 	}
 
-	if t.TransactionDate.After(time.Now()) {
+	if t.TransactionDate.After(time.Now().UTC()) {
 		return errors.ErrFutureDate
 	}
 

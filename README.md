@@ -12,6 +12,7 @@ A robust HTTP REST API built in Go for processing purchase transactions with asy
 - ✅ Rate limiting
 - ✅ Health checks
 - ✅ Docker containerization
+- ✅ Currency conversion using Treasury Reporting Rates API
 
 ## Technology Stack
 
@@ -38,7 +39,7 @@ cd vr-software-challenge
 ```bash
 cp .env.example .env
 ```
-2.1. Copy your .env to the ./config and ./tests, so it can be used throught the application.
+2.1. Copy your .env to the ./config and ./tests, so it can be used throughout the application.
 
 3. Start the services:
 ```bash
@@ -121,6 +122,23 @@ Response (200 OK):
     },
     // ... more transactions
 ]
+```
+
+#### Convert Transaction Currency
+```http
+GET /api/v1/transactions/{id}/convert?currency={currencyCode}
+
+Response (200 OK):
+{
+    "transaction_id": "123e4567-e89b-12d3-a456-426614174000",
+    "description": "Office Supplies",
+    "transaction_date": "2024-01-20",
+    "original_amount_usd": "123.45",
+    "exchange_rate": "0.85",
+    "converted_amount": "104.93",
+    "target_currency": "EUR",
+    "exchange_date": "2024-01-19"
+}
 ```
 
 ### Transaction States

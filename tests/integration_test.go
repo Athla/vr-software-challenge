@@ -17,7 +17,9 @@ import (
 	"github.com/Athla/vr-software-challenge/internal/domain/models"
 	"github.com/Athla/vr-software-challenge/internal/infrastructure/database"
 	"github.com/Athla/vr-software-challenge/internal/infrastructure/messagery"
+	"github.com/Athla/vr-software-challenge/internal/infrastructure/treasury"
 	"github.com/Athla/vr-software-challenge/internal/repository"
+	"github.com/Athla/vr-software-challenge/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
@@ -33,6 +35,34 @@ var (
 func cleanup(t *testing.T) {
 	_, err := dbHandler.Exec("TRUNCATE TABLE transactions, transaction_audit_logs CASCADE")
 	assert.NoError(t, err, "Failed to cleanup test data")
+}
+
+func setupRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	router := gin.Default()
+
+	treasuryClient := treasury.NewClient()
+	currencyService := service.NewCurrencyService(treasuryClient, repository.NewTransactionRepository(dbHandler))
+
+	transactionHandler := handlers.TransactionHandler{
+		Repo:     repository.NewTransactionRepository(dbHandler),
+		Producer: producer,
+	}
+
+	currencyHandler := handlers.CurrencyHandler{
+		CurrencyService: currencyService,
+	}
+
+	v1 := router.Group("/api/v1")
+	{
+		v1.POST("/transactions", transactionHandler.Create)
+		v1.GET("/transactions/:id", transactionHandler.GetByID)
+		v1.PATCH("/transactions/:id/status", transactionHandler.UpdateStatus)
+		v1.GET("/transactions", transactionHandler.List)
+		v1.GET("/transactions/:id/convert", currencyHandler.ConvertCurrency)
+	}
+
+	return router
 }
 
 func TestMain(m *testing.M) {
@@ -61,23 +91,6 @@ func TestMain(m *testing.M) {
 	producer.Close()
 
 	os.Exit(code)
-}
-
-func setupRouter() *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	router := gin.Default()
-
-	transactionHandler := handlers.TransactionHandler{
-		Repo:     repository.NewTransactionRepository(dbHandler),
-		Producer: producer,
-	}
-
-	router.POST("/api/v1/transactions", transactionHandler.Create)
-	router.GET("/api/v1/transactions/:id", transactionHandler.GetByID)
-	router.PATCH("/api/v1/transactions/:id/status", transactionHandler.UpdateStatus)
-	router.GET("/api/v1/transactions", transactionHandler.List)
-
-	return router
 }
 
 func TestCreateTransactionIntegration(t *testing.T) {
