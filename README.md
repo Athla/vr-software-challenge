@@ -40,6 +40,28 @@ cd vr-software-challenge
 cp .env.example .env
 ```
 2.1. Copy your .env to the ./config and ./tests, so it can be used throughout the application.
+2.2. For the test enviroment and local development, you may proceed with the following credentials.
+```env
+# App
+APP_ENV=development
+PORT=8080
+DEBUG=true
+LOG_LEVEL=debug
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=your_db_user
+DB_PASSWORD=your_db_password
+DB_NAME=your_db_name
+DB_SSL_MODE=disable
+
+# Kafka
+KAFKA_BROKERS=localhost:9092
+KAFKA_GROUP_ID=your_kafka_group
+KAFKA_TOPIC=your_kafka_topic
+KAFKA_CLIENT_ID=your_kafka_client_id
+```
 
 3. Start the services:
 ```bash
