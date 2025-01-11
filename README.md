@@ -289,4 +289,4 @@ jobs:
    - Run `swag init` to generate the Swagger documentation.
 
 3. **Serve Swagger UI:**
-   - Integrate Swagger UI into your application to serve the generated documentation.
+
