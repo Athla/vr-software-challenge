@@ -51,16 +51,16 @@ LOG_LEVEL=debug
 # Database
 DB_HOST=localhost
 DB_PORT=5432
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_NAME=your_db_name
+DB_USER=checkout_user
+DB_PASSWORD=checkout_password
+DB_NAME=vr_checkout_db
 DB_SSL_MODE=disable
 
 # Kafka
 KAFKA_BROKERS=localhost:9092
-KAFKA_GROUP_ID=your_kafka_group
-KAFKA_TOPIC=your_kafka_topic
-KAFKA_CLIENT_ID=your_kafka_client_id
+KAFKA_GROUP_ID=checkout_group
+KAFKA_TOPIC=transactions
+KAFKA_CLIENT_ID=checkout_client
 ```
 
 3. Start the services:
